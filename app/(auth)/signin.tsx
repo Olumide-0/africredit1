@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -6,31 +6,54 @@ import {
   Pressable,
   StyleSheet,
   Image,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform,
+  Keyboard,
 } from "react-native";
 import { Link, router } from "expo-router";
 import { Eye, EyeOff } from "lucide-react-native";
+import { useMutation } from "@tanstack/react-query";
+import * as SecureStore from "expo-secure-store";
 import logo from "../../assets/images/africredit-logo.png";
-import { useProfile } from "../../contexts/ProfileContext";
+import { login } from "../../services/api";
 
 const PHONE_REGEX = /[^0-9\s]/g;
 const PHONE_DIGITS_REGEX = /^\d{10,13}$/;
 
 export default function SignIn() {
-  const { updateProfile } = useProfile();
   const [phone, setPhone] = useState("234 345 4567");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [phoneError, setPhoneError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [formError, setFormError] = useState("");
+
+  const passwordInputRef = useRef<TextInput>(null);
+
+  const loginMutation = useMutation({
+    mutationFn: login,
+    onSuccess: async (data) => {
+      await SecureStore.setItemAsync("authToken", data.token);
+      router.push("/(tabs)/home");
+    },
+    onError: (error: Error) => {
+      console.log("Login mutation error", error);
+      setFormError(error.message);
+    },
+  });
 
   const handlePhoneChange = (value: string) => {
     setPhone(value.replace(PHONE_REGEX, ""));
     if (phoneError) setPhoneError("");
+    if (formError) setFormError("");
   };
 
   const handlePasswordChange = (value: string) => {
     setPassword(value);
     if (passwordError) setPasswordError("");
+    if (formError) setFormError("");
   };
 
   const validate = () => {
@@ -57,6 +80,8 @@ export default function SignIn() {
   };
 
   const handleLogin = () => {
+    Keyboard.dismiss();
+
     const { isValid, phoneMsg, passwordMsg } = validate();
 
     if (!isValid) {
@@ -69,84 +94,113 @@ export default function SignIn() {
       return;
     }
 
-    // Save the number the user actually signed in with, so it shows up
-    // in Personal Information / Profile everywhere else in the app.
     const digitsOnly = phone.replace(/\s/g, "");
-    updateProfile({ phone: `+${digitsOnly}` });
+    const formattedPhone = `+234${digitsOnly.replace(/^234/, "")}`;
 
-    console.log("Login submitted", { phone, password });
-    router.push("/(tabs)/home");
+    console.log("Login submitted", { phone: formattedPhone });
+    loginMutation.mutate({ phone_number: formattedPhone, password });
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.logoSection}>
-        <Image source={logo} style={styles.logo} resizeMode="contain" />
-        <Text style={styles.tagline}>Just a smarter way to borrow</Text>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.title}>Welcome back</Text>
-        <Text style={styles.subtitle}>
-          Log in to check your loan status and manage repayments.
-        </Text>
-
-        <Text style={styles.label}>Phone number</Text>
-        <TextInput
-          style={[styles.input, phoneError && styles.inputError]}
-          value={phone}
-          onChangeText={handlePhoneChange}
-          keyboardType="phone-pad"
-          placeholder="234 345 4567"
-          placeholderTextColor="#9ca3af"
-          maxLength={13}
-        />
-        {!!phoneError && <Text style={styles.errorText}>{phoneError}</Text>}
-
-        <Text style={styles.label}>Password</Text>
-        <View
-          style={[styles.passwordRow, passwordError && styles.inputError]}
-        >
-          <TextInput
-            style={styles.passwordInput}
-            value={password}
-            onChangeText={handlePasswordChange}
-            placeholder="Enter a password"
-            placeholderTextColor="#9ca3af"
-            secureTextEntry={!showPassword}
-          />
-          <Pressable onPress={() => setShowPassword((v) => !v)}>
-            {showPassword ? (
-              <EyeOff size={20} color="#6b7280" />
-            ) : (
-              <Eye size={20} color="#6b7280" />
-            )}
-          </Pressable>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.logoSection}>
+          <Image source={logo} style={styles.logo} resizeMode="contain" />
+          <Text style={styles.tagline}>Just a smarter way to borrow</Text>
         </View>
-        {!!passwordError && (
-          <Text style={styles.errorText}>{passwordError}</Text>
-        )}
 
-        <Link href="/forgot-password" asChild>
-          <Pressable>
-            <Text style={styles.forgotPassword}>Forgot password?</Text>
-          </Pressable>
-        </Link>
+        <View style={styles.card}>
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subtitle}>
+            Log in to check your loan status and manage repayments.
+          </Text>
 
-        <Pressable style={styles.loginButton} onPress={handleLogin}>
-          <Text style={styles.loginButtonText}>Login</Text>
-        </Pressable>
+          {!!formError && <Text style={styles.formError}>{formError}</Text>}
 
-        <View style={styles.signupRow}>
-          <Text style={styles.signupText}>New to AfriCredit? </Text>
-          <Link href="/signup" asChild>
+          <Text style={styles.label}>Phone number</Text>
+          <TextInput
+            style={[styles.input, phoneError && styles.inputError]}
+            value={phone}
+            onChangeText={handlePhoneChange}
+            keyboardType="phone-pad"
+            placeholder="234 345 4567"
+            placeholderTextColor="#9ca3af"
+            maxLength={13}
+            editable={!loginMutation.isPending}
+            returnKeyType="next"
+            onSubmitEditing={() => passwordInputRef.current?.focus()}
+            blurOnSubmit={false}
+          />
+          {!!phoneError && <Text style={styles.errorText}>{phoneError}</Text>}
+
+          <Text style={styles.label}>Password</Text>
+          <View
+            style={[styles.passwordRow, passwordError && styles.inputError]}
+          >
+            <TextInput
+              ref={passwordInputRef}
+              style={styles.passwordInput}
+              value={password}
+              onChangeText={handlePasswordChange}
+              placeholder="Enter a password"
+              placeholderTextColor="#9ca3af"
+              secureTextEntry={!showPassword}
+              editable={!loginMutation.isPending}
+              returnKeyType="done"
+              onSubmitEditing={handleLogin}
+            />
+            <Pressable onPress={() => setShowPassword((v) => !v)}>
+              {showPassword ? (
+                <EyeOff size={20} color="#6b7280" />
+              ) : (
+                <Eye size={20} color="#6b7280" />
+              )}
+            </Pressable>
+          </View>
+          {!!passwordError && (
+            <Text style={styles.errorText}>{passwordError}</Text>
+          )}
+
+          <Link href="/forgot-password" asChild>
             <Pressable>
-              <Text style={styles.signupLink}>Create an account</Text>
+              <Text style={styles.forgotPassword}>Forgot password?</Text>
             </Pressable>
           </Link>
+
+          <Pressable
+            style={[
+              styles.loginButton,
+              loginMutation.isPending && styles.loginButtonDisabled,
+            ]}
+            onPress={handleLogin}
+            disabled={loginMutation.isPending}
+          >
+            {loginMutation.isPending ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.loginButtonText}>Login</Text>
+            )}
+          </Pressable>
+
+          <View style={styles.signupRow}>
+            <Text style={styles.signupText}>New to AfriCredit? </Text>
+            <Link href="/signup" asChild>
+              <Pressable>
+                <Text style={styles.signupLink}>Create an account</Text>
+              </Pressable>
+            </Link>
+          </View>
         </View>
-      </View>
-    </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -154,6 +208,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#FAF3EA",
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   logoSection: {
     alignItems: "center",
@@ -188,6 +245,12 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     marginTop: 4,
     marginBottom: 24,
+  },
+  formError: {
+    color: "#DC2626",
+    fontSize: 13,
+    marginBottom: 16,
+    textAlign: "center",
   },
   label: {
     fontSize: 13,
@@ -241,6 +304,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: "center",
     marginTop: 24,
+  },
+  loginButtonDisabled: {
+    opacity: 0.7,
   },
   loginButtonText: {
     color: "#fff",
