@@ -1,4 +1,6 @@
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://africredit-backend-pn7.onrender.com/api/v1";
+const API_URL =
+  process.env.EXPO_PUBLIC_API_URL ??
+  "https://africredit-backend-pn7.onrender.com/api/v1";
 
 export async function apiRequest(endpoint: string, options: RequestInit = {}) {
   const response = await fetch(`${API_URL}${endpoint}`, {
@@ -14,7 +16,9 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
   if (!response.ok) {
     console.log("API error", { endpoint, status: response.status, data });
     throw new Error(
-      data?.error?.message || data?.message || "Something went wrong. Please try again."
+      data?.error?.message ||
+        data?.message ||
+        "Something went wrong. Please try again.",
     );
   }
 
@@ -63,7 +67,7 @@ export type InitiateRegisterPayload = {
 export type InitiateRegisterResponse = { message?: string };
 
 export function initiateRegister(
-  payload: InitiateRegisterPayload
+  payload: InitiateRegisterPayload,
 ): Promise<InitiateRegisterResponse> {
   return apiRequest("/auth/register", {
     method: "POST",
@@ -80,7 +84,7 @@ export type VerifyRegistrationPayload = {
 export type VerifyRegistrationResponse = { token?: string };
 
 export async function verifyRegistration(
-  payload: VerifyRegistrationPayload
+  payload: VerifyRegistrationPayload,
 ): Promise<VerifyRegistrationResponse> {
   const res = await apiRequest("/auth/verify-registration", {
     method: "POST",
@@ -97,7 +101,7 @@ export type ForgotPasswordPayload = { phone_number: string };
 export type ForgotPasswordResponse = { message?: string };
 
 export async function forgotPassword(
-  payload: ForgotPasswordPayload
+  payload: ForgotPasswordPayload,
 ): Promise<ForgotPasswordResponse> {
   console.log("Forgot password request", payload);
 
@@ -116,7 +120,7 @@ export type VerifyResetOtpPayload = { phone_number: string; otp: string };
 export type VerifyResetOtpResponse = { message?: string };
 
 export async function verifyResetOtp(
-  payload: VerifyResetOtpPayload
+  payload: VerifyResetOtpPayload,
 ): Promise<VerifyResetOtpResponse> {
   const res = await apiRequest("/auth/verify-otp", {
     method: "POST",
